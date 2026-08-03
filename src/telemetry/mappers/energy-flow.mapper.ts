@@ -109,8 +109,13 @@ export function mapEnergyFlow(
   if (solarActive) activeSources.push('solar');
   if (discharging) activeSources.push('battery');
 
+  // 3 hours converted to milliseconds (3 * 60 * 60 * 1000)
+  const THREE_HOURS_MS = 10800000;
+
+  // Add the offset to the original timestamp
+  const correctedGts = Number(payload.gts) + THREE_HOURS_MS;
   return {
-    readingAt: toIsoDate(payload.gts, timeZone),
+    readingAt: toIsoDate(correctedGts, timeZone),
     fetchedAt: new Date().toISOString(),
     mode: mode || null,
     activeSources,
