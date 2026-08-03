@@ -1,0 +1,36 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+
+import { AlarmsModule } from './alarms/alarms.module';
+import { AuthModule } from './auth/auth.module';
+import { CameraModule } from './camera/camera.module';
+import { configuration } from './config/configuration';
+import { validateEnv } from './config/env.validation';
+import { ControlsModule } from './controls/controls.module';
+import { DevicesModule } from './devices/devices.module';
+import { DiagnosticsModule } from './diagnostics/diagnostics.module';
+import { HealthModule } from './health/health.module';
+import { ShineModule } from './shine/shine.module';
+import { TelemetryModule } from './telemetry/telemetry.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      load: [configuration],
+      validate: validateEnv,
+      envFilePath: ['.env.local', '.env'],
+    }),
+    ShineModule,
+    AuthModule,
+    DevicesModule,
+    TelemetryModule,
+    ControlsModule,
+    AlarmsModule,
+    CameraModule,
+    DiagnosticsModule,
+    HealthModule,
+  ],
+})
+export class AppModule {}
