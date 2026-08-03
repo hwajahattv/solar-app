@@ -59,7 +59,10 @@ export function flattenParameters(
   return lookup;
 }
 
-export function mapEnergyFlow(payload: ShineLastDataPayload): EnergyFlowDto {
+export function mapEnergyFlow(
+  payload: ShineLastDataPayload,
+  timeZone: string,
+): EnergyFlowDto {
   const parameters = flattenParameters(payload);
   const value = (id: string): number | null =>
     toNumber(parameters.get(id)?.val);
@@ -107,7 +110,7 @@ export function mapEnergyFlow(payload: ShineLastDataPayload): EnergyFlowDto {
   if (discharging) activeSources.push('battery');
 
   return {
-    readingAt: toIsoDate(payload.gts),
+    readingAt: toIsoDate(payload.gts, timeZone),
     fetchedAt: new Date().toISOString(),
     mode: mode || null,
     activeSources,

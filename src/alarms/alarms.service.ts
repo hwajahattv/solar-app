@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import { deviceParams, DeviceRefDto } from '../common/dto/device-ref.dto';
 import { toIsoDate } from '../common/utils/numeric';
@@ -15,7 +16,14 @@ interface WarningPayload extends Record<string, unknown> {
 
 @Injectable()
 export class AlarmsService {
-  constructor(private readonly shine: ShineApiService) {}
+  private readonly timeZone: string;
+
+  constructor(
+    private readonly shine: ShineApiService,
+    config: ConfigService,
+  ) {
+    this.timeZone = config.getOrThrow<string>('timezone');
+  }
 
   async list(
     device: DeviceRefDto,
@@ -44,7 +52,7 @@ export class AlarmsService {
       total:
         Number.parseInt(String(payload.total ?? rows.length), 10) ||
         rows.length,
-      alarms: rows.map((row) => toAlarmDto(row)),
+      alarms: rows.map((row) => toAlarmDto(row, this.timeZone)),
     };
   }
 }
@@ -57,9 +65,9 @@ function extractRows(payload: WarningPayload): ShineWarningRow[] {
   return [];
 }
 
-function toAlarmDto(row: ShineWarningRow): AlarmDto {
-  const startedAt = toIsoDate(row.gts);
-  const clearedAt = toIsoDate(row.cts);
+function toAlarmDto(row: ShineWarningRow, timeZone: string): AlarmDto {
+  const startedAt = toIsoDate(row.gts, timeZone);
+  const clearedAt = toIsoDate(row.cts, timeZone);
 
   return {
     title: row.title?.trim() || 'Alarm',

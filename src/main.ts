@@ -12,6 +12,9 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const config = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
+  const timeZone = config.getOrThrow<string>('timezone');
+  process.env.TZ = timeZone;
+  logger.log(`Using application timezone ${timeZone}`);
 
   // crossOriginResourcePolicy is relaxed so the MJPEG stream can be embedded by
   // the SPA (and later the mobile/TV clients) served from another origin.

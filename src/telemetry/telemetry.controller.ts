@@ -30,7 +30,7 @@ export class TelemetryController {
   })
   @ApiOkResponse({ type: HistoryPageDto })
   history(@Query() query: HistoryQueryDto): Promise<HistoryPageDto> {
-    const date = query.date ?? TelemetryService.today();
+    const date = query.date ?? this.telemetry.today();
     return this.telemetry.history(query, date, query.page, query.pageSize);
   }
 }

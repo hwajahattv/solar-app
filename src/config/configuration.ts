@@ -19,6 +19,8 @@ export interface CameraConfig {
 export interface AppConfiguration {
   port: number;
   corsOrigins: string[];
+  /** IANA zone used to interpret upstream wall-clock timestamps and "today". */
+  timezone: string;
   shine: ShineConfig;
   camera: CameraConfig;
 }
@@ -34,6 +36,7 @@ export const configuration = (): AppConfiguration => ({
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
+  timezone: process.env.APP_TIMEZONE ?? 'Asia/Karachi',
   shine: {
     upstreamUrl:
       process.env.SHINE_UPSTREAM_URL ??

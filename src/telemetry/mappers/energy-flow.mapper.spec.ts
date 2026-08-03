@@ -1,6 +1,8 @@
 import type { ShineLastDataPayload } from '../../shine/shine.types';
 import { mapEnergyFlow } from './energy-flow.mapper';
 
+const TIMEZONE = 'Asia/Karachi';
+
 const payload = (
   parameters: Array<{ id: string; val: string | number }>,
 ): ShineLastDataPayload => ({
@@ -8,33 +10,28 @@ const payload = (
   pars: { bt_: parameters },
 });
 
+const map = (input: ShineLastDataPayload) => mapEnergyFlow(input, TIMEZONE);
+
 describe('mapEnergyFlow', () => {
   it('treats a sub-threshold grid voltage as offline', () => {
-    const flow = mapEnergyFlow(
-      payload([{ id: 'bt_grid_voltage', val: '0.4' }]),
-    );
+    const flow = map(payload([{ id: 'bt_grid_voltage', val: '0.4' }]));
 
     expect(flow.grid.online).toBe(false);
     expect(flow.activeSources).not.toContain('grid');
   });
 
   it('marks solar active when either power or current is present', () => {
-    expect(
-      mapEnergyFlow(payload([{ id: 'bt_output_power_1', val: '1250' }])).solar
-        .active,
-    ).toBe(true);
-    expect(
-      mapEnergyFlow(payload([{ id: 'pv_input_current', val: '2.4' }])).solar
-        .active,
-    ).toBe(true);
-    expect(
-      mapEnergyFlow(payload([{ id: 'pv_input_current', val: '0.05' }])).solar
-        .active,
-    ).toBe(false);
+    expect(map(payload([{ id: 'bt_output_power_1', val: '1250' }])).solar.active).toBe(
+      true,
+    );
+    expect(map(payload([{ id: 'pv_input_current', val: '2.4' }])).solar.active).toBe(true);
+    expect(map(payload([{ id: 'pv_input_current', val: '0.05' }])).solar.active).toBe(
+      false,
+    );
   });
 
   it('reports charging separately from discharging and excludes it from active sources', () => {
-    const flow = mapEnergyFlow(
+    const flow = map(
       payload([
         { id: 'bt_battery_voltage', val: '52.8' },
         { id: 'bt_battery_charging_current', val: '18' },
@@ -49,7 +46,7 @@ describe('mapEnergyFlow', () => {
   });
 
   it('derives load current from apparent power and the measured output voltage', () => {
-    const flow = mapEnergyFlow(
+    const flow = map(
       payload([
         { id: 'bt_ac_output_apparent_power', val: '2300' },
         { id: 'bt_ac_output_voltage', val: '230' },
@@ -60,15 +57,13 @@ describe('mapEnergyFlow', () => {
   });
 
   it('falls back to a nominal voltage when the inverter reports none', () => {
-    const flow = mapEnergyFlow(
-      payload([{ id: 'bt_ac_output_apparent_power', val: '460' }]),
-    );
+    const flow = map(payload([{ id: 'bt_ac_output_apparent_power', val: '460' }]));
 
     expect(flow.load.current).toBe(2);
   });
 
   it('summarises every source feeding the load', () => {
-    const flow = mapEnergyFlow(
+    const flow = map(
       payload([
         { id: 'bt_grid_voltage', val: '238' },
         { id: 'bt_output_power_1', val: '900' },
@@ -82,15 +77,13 @@ describe('mapEnergyFlow', () => {
   });
 
   it('strips units from values that arrive as formatted strings', () => {
-    const flow = mapEnergyFlow(
-      payload([{ id: 'bt_battery_capacity', val: '87 %' }]),
-    );
+    const flow = map(payload([{ id: 'bt_battery_capacity', val: '87 %' }]));
 
     expect(flow.battery.soc).toBe(87);
   });
 
   it('returns nulls instead of throwing when the payload is empty', () => {
-    const flow = mapEnergyFlow({});
+    const flow = map({});
 
     expect(flow.grid.voltage).toBeNull();
     expect(flow.activeSources).toEqual([]);

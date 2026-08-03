@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
+import { todayInTimeZone } from '../common/utils/timezone';
 import { deviceParams, DeviceRefDto } from '../common/dto/device-ref.dto';
 import { ShineApiService } from '../shine/shine-api.service';
 import type {
@@ -13,7 +15,18 @@ import { mapHistoryPage } from './mappers/history.mapper';
 
 @Injectable()
 export class TelemetryService {
-  constructor(private readonly shine: ShineApiService) {}
+  private readonly timeZone: string;
+
+  constructor(
+    private readonly shine: ShineApiService,
+    config: ConfigService,
+  ) {
+    this.timeZone = config.getOrThrow<string>('timezone');
+  }
+
+  today(): string {
+    return todayInTimeZone(this.timeZone);
+  }
 
   async energyFlow(device: DeviceRefDto): Promise<EnergyFlowDto> {
     const payload = await this.shine.callOrThrow<ShineLastDataPayload>(
@@ -24,7 +37,7 @@ export class TelemetryService {
       },
     );
 
-    return mapEnergyFlow(payload);
+    return mapEnergyFlow(payload, this.timeZone);
   }
 
   async history(
@@ -46,12 +59,5 @@ export class TelemetryService {
     );
 
     return mapHistoryPage(payload, { date, page, pageSize });
-  }
-
-  /** Local calendar day in the format the upstream expects. */
-  static today(): string {
-    const now = new Date();
-    const pad = (value: number): string => String(value).padStart(2, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   }
 }

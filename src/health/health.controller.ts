@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CameraService } from '../camera/camera.service';
@@ -9,16 +10,22 @@ class HealthDto {
   uptimeSeconds!: number;
   shineConfigured!: boolean;
   cameraConfigured!: boolean;
+  timezone!: string;
   timestamp!: string;
 }
 
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
+  private readonly timeZone: string;
+
   constructor(
     private readonly session: ShineSessionService,
     private readonly camera: CameraService,
-  ) {}
+    config: ConfigService,
+  ) {
+    this.timeZone = config.getOrThrow<string>('timezone');
+  }
 
   @Get()
   @ApiOperation({
@@ -31,6 +38,7 @@ export class HealthController {
       uptimeSeconds: Math.round(process.uptime()),
       shineConfigured: this.session.isConfigured,
       cameraConfigured: this.camera.isConfigured,
+      timezone: this.timeZone,
       timestamp: new Date().toISOString(),
     };
   }
