@@ -1,3 +1,5 @@
+import { resolveControlsSecret } from '../controls/controls-auth.util';
+
 export interface ShineConfig {
   upstreamUrl: string;
   companyKey: string;
@@ -16,6 +18,11 @@ export interface CameraConfig {
   snapshotTimeoutMs: number;
 }
 
+export interface ControlsConfig {
+  password: string;
+  secret: string;
+}
+
 export interface AppConfiguration {
   port: number;
   corsOrigins: string[];
@@ -23,6 +30,7 @@ export interface AppConfiguration {
   timezone: string;
   shine: ShineConfig;
   camera: CameraConfig;
+  controls: ControlsConfig;
 }
 
 const toInt = (value: string | undefined, fallback: number): number => {
@@ -48,26 +56,36 @@ export function parseCorsOrigins(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
-export const configuration = (): AppConfiguration => ({
-  port: toInt(process.env.PORT, 3000),
-  corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
-  timezone: process.env.APP_TIMEZONE ?? 'Asia/Karachi',
-  shine: {
-    upstreamUrl:
-      process.env.SHINE_UPSTREAM_URL ??
-      'http://android.shinemonitor.com/public/',
-    companyKey: process.env.SHINE_COMPANY_KEY ?? 'bnrl_frRFjEz8Mkn',
-    username: process.env.SHINE_USR ?? '',
-    password: process.env.SHINE_PWD ?? '',
-    requestTimeoutMs: toInt(process.env.SHINE_TIMEOUT_MS, 30000),
-    locale: process.env.SHINE_LOCALE ?? 'en_US',
-  },
-  camera: {
-    rtspUrl: process.env.CAMERA_RTSP ?? '',
-    ffmpegPath: process.env.FFMPEG_PATH ?? 'ffmpeg',
-    fps: toInt(process.env.CAMERA_FPS, 10),
-    quality: toInt(process.env.CAMERA_QUALITY, 6),
-    maxConcurrentStreams: toInt(process.env.CAMERA_MAX_STREAMS, 3),
-    snapshotTimeoutMs: toInt(process.env.CAMERA_SNAPSHOT_TIMEOUT_MS, 15000),
-  },
-});
+export const configuration = (): AppConfiguration => {
+  const controlsPassword = process.env.CONTROLS_PASSWORD ?? '';
+  return {
+    port: toInt(process.env.PORT, 3000),
+    corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
+    timezone: process.env.APP_TIMEZONE ?? 'Asia/Karachi',
+    shine: {
+      upstreamUrl:
+        process.env.SHINE_UPSTREAM_URL ??
+        'http://android.shinemonitor.com/public/',
+      companyKey: process.env.SHINE_COMPANY_KEY ?? 'bnrl_frRFjEz8Mkn',
+      username: process.env.SHINE_USR ?? '',
+      password: process.env.SHINE_PWD ?? '',
+      requestTimeoutMs: toInt(process.env.SHINE_TIMEOUT_MS, 30000),
+      locale: process.env.SHINE_LOCALE ?? 'en_US',
+    },
+    camera: {
+      rtspUrl: process.env.CAMERA_RTSP ?? '',
+      ffmpegPath: process.env.FFMPEG_PATH ?? 'ffmpeg',
+      fps: toInt(process.env.CAMERA_FPS, 10),
+      quality: toInt(process.env.CAMERA_QUALITY, 6),
+      maxConcurrentStreams: toInt(process.env.CAMERA_MAX_STREAMS, 3),
+      snapshotTimeoutMs: toInt(process.env.CAMERA_SNAPSHOT_TIMEOUT_MS, 15000),
+    },
+    controls: {
+      password: controlsPassword,
+      secret: resolveControlsSecret(
+        controlsPassword,
+        process.env.CONTROLS_SECRET ?? '',
+      ),
+    },
+  };
+};

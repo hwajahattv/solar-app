@@ -28,7 +28,10 @@ async function bootstrap(): Promise<void> {
   logger.log(`CORS allowlist: ${corsOrigins.join(', ') || '(empty)'}`);
 
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean | string) => void,
+    ) => {
       // Non-browser clients (curl, server-to-server) omit Origin.
       if (!origin) {
         callback(null, true);

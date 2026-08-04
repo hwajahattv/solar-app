@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { DeviceRefDto } from '../common/dto/device-ref.dto';
+import { ControlsAuthGuard } from './controls-auth.guard';
 import { ControlsService } from './controls.service';
 import {
   ApplyProfileDto,
@@ -15,6 +16,7 @@ import { PREFERRED_PROFILE } from './preferred-profile';
 
 @ApiTags('controls')
 @Controller('controls')
+@UseGuards(ControlsAuthGuard)
 export class ControlsController {
   constructor(private readonly controls: ControlsService) {}
 
