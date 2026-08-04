@@ -23,6 +23,7 @@ import {
   integratePowerKwToCumulativeKwh,
   isCalculatedChartField,
   resolvePowerSourceIds,
+  spParameterForCalculatedField,
   spSamplesToPoints,
   sumPowerSeries,
   totalEnergyKwhFromPowerKw,
@@ -40,6 +41,8 @@ const BATTERY_ENERGY_CHART_FIELDS = [
 const DAILY_ENERGY_CACHE_TTL_MS = 60_000;
 /** Fallback when voltage series is missing (typical 48V LiFePO4 pack). */
 const FALLBACK_BATTERY_VOLTAGE = 51.2;
+/** Shine DatNew is unstable above ~2–3 fields; fetch in tiny batches. */
+const DATNEW_FIELD_BATCH_SIZE = 2;
 
 const MAX_FIELDS = 8;
 const MAX_RANGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -98,8 +101,18 @@ export class ChartsService {
     const nativeRequested = fieldIds.filter((id) => !isCalculatedChartField(id));
     const calculatedRequested = fieldIds.filter((id) => isCalculatedChartField(id));
 
+    // SP OneDay is far more reliable than DatNew for PV/load energy curves.
+    const calculatedFromSp = await this.buildCalculatedSeriesFromSp(
+      device,
+      calculatedRequested,
+      from,
+      to,
+      catalogById,
+    );
+
     const fetchIds = new Set(nativeRequested);
     for (const id of calculatedRequested) {
+      if (calculatedFromSp.has(id)) continue;
       const def = getCalculatedFieldDef(id);
       if (!def) continue;
       for (const sourceId of resolvePowerSourceIds(def, catalogIds)) {
@@ -107,13 +120,16 @@ export class ChartsService {
       }
     }
 
-    const payload =
-      fetchIds.size === 0
-        ? { date: [] }
-        : await this.fetchSeriesPayload(device, [...fetchIds], from, to, precision);
+    const payload = await this.fetchSeriesPayload(
+      device,
+      [...fetchIds],
+      from,
+      to,
+      precision,
+    );
 
     const nativeSeries = mapChartSeries(payload, catalogById, [...fetchIds]);
-    const nativeById = new Map(nativeSeries.map((series) => [series.id, series]));
+    const nativeById = new Map(nativeSeries.map((item) => [item.id, item]));
 
     const series: ChartSeriesDto[] = fieldIds.map((id) => {
       if (!isCalculatedChartField(id)) {
@@ -126,6 +142,9 @@ export class ChartsService {
           }
         );
       }
+
+      const fromSp = calculatedFromSp.get(id);
+      if (fromSp) return fromSp;
 
       const def = getCalculatedFieldDef(id)!;
       const sources = resolvePowerSourceIds(def, catalogIds)
@@ -207,6 +226,42 @@ export class ChartsService {
     return totals;
   }
 
+  private async buildCalculatedSeriesFromSp(
+    device: DeviceRefDto,
+    calculatedIds: string[],
+    from: string,
+    to: string,
+    catalogById: Map<string, ChartFieldDto>,
+  ): Promise<Map<string, ChartSeriesDto>> {
+    const result = new Map<string, ChartSeriesDto>();
+    const days = enumerateCalendarDays(from, to);
+
+    await Promise.all(
+      calculatedIds.map(async (id) => {
+        const parameter = spParameterForCalculatedField(id);
+        const def = getCalculatedFieldDef(id);
+        if (!parameter || !def) return;
+
+        const powerPoints: ChartPointDto[] = [];
+        for (const day of days) {
+          const dayPoints = await this.fetchSpOneDayPoints(device, day, parameter);
+          powerPoints.push(...dayPoints);
+        }
+        if (powerPoints.length === 0) return;
+
+        const powerKw = asKwPowerPoints(powerPoints, 'kW');
+        result.set(id, {
+          id: def.id,
+          title: catalogById.get(id)?.title ?? def.title,
+          unit: def.unit,
+          points: integratePowerKwToCumulativeKwh(powerKw),
+        });
+      }),
+    );
+
+    return result;
+  }
+
   private async fetchSpOneDayPoints(
     device: DeviceRefDto,
     day: string,
@@ -238,35 +293,29 @@ export class ChartsService {
     from: string,
     to: string,
   ): Promise<Map<string, ChartSeriesDto>> {
-    // Try the full trio first; on upstream system errors fall back to currents only.
+    // Try the full trio first; on empty/failed responses fall back to currents only.
     const attempts: string[][] = [
       [...BATTERY_ENERGY_CHART_FIELDS],
       ['bt_battery_charging_current', 'bt_battery_discharge_current'],
     ];
 
     for (const fields of attempts) {
-      try {
-        const payload = await this.fetchSeriesPayload(device, fields, from, to, 5);
-        const catalogById = new Map<string, ChartFieldDto>(
-          fields.map((id) => [
+      const payload = await this.fetchSeriesPayload(device, fields, from, to, 5);
+      const catalogById = new Map<string, ChartFieldDto>(
+        fields.map((id) => [
+          id,
+          {
             id,
-            {
-              id,
-              title: id,
-              unit: id.includes('voltage') ? 'V' : 'A',
-              group: id.includes('voltage') ? 'V' : 'A',
-            },
-          ]),
-        );
-        const series = mapChartSeries(payload, catalogById, fields);
-        return new Map(series.map((item) => [item.id, item]));
-      } catch (error: unknown) {
-        this.logger.warn(
-          `Battery chart fields [${fields.join(',')}] unavailable: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      }
+            title: id,
+            unit: id.includes('voltage') ? 'V' : 'A',
+            group: id.includes('voltage') ? 'V' : 'A',
+          },
+        ]),
+      );
+      const series = mapChartSeries(payload, catalogById, fields);
+      const byId = new Map(series.map((item) => [item.id, item]));
+      const hasPoints = series.some((item) => item.points.length > 0);
+      if (hasPoints) return byId;
     }
 
     return new Map();
@@ -302,6 +351,10 @@ export class ChartsService {
     return Array.isArray(payload) ? payload : [];
   }
 
+  /**
+   * Fetch DatNew in small batches. Never throws — failed batches are skipped so
+   * charts can still return SP-backed calculated series (and any successful natives).
+   */
   private async fetchSeriesPayload(
     device: DeviceRefDto,
     fieldIds: string[],
@@ -311,17 +364,62 @@ export class ChartsService {
   ): Promise<ShineChartFieldsDatPayload> {
     if (fieldIds.length === 0) return { date: [] };
 
-    return this.shine.callOrThrow<ShineChartFieldsDatPayload>(
-      'queryDeviceChartFieldsDatNew',
-      {
-        ...deviceParams(device),
-        precision,
-        sdate: toShineDateTime(from),
-        edate: toShineDateTime(to),
-        field: fieldIds.join(','),
-        source: 1,
-      },
-    );
+    const merged: NonNullable<ShineChartFieldsDatPayload['date']> = [];
+    const seenPars = new Set<string>();
+
+    for (let i = 0; i < fieldIds.length; i += DATNEW_FIELD_BATCH_SIZE) {
+      const batch = fieldIds.slice(i, i + DATNEW_FIELD_BATCH_SIZE);
+      const batchRows = await this.fetchDatNewBatch(device, batch, from, to, precision);
+      for (const row of batchRows) {
+        const par = row.par?.trim();
+        if (!par || seenPars.has(par)) continue;
+        seenPars.add(par);
+        merged.push(row);
+      }
+    }
+
+    return { date: merged };
+  }
+
+  private async fetchDatNewBatch(
+    device: DeviceRefDto,
+    fieldIds: string[],
+    from: string,
+    to: string,
+    precision: number,
+  ): Promise<NonNullable<ShineChartFieldsDatPayload['date']>> {
+    if (fieldIds.length === 0) return [];
+
+    try {
+      const payload = await this.shine.callOrThrow<ShineChartFieldsDatPayload>(
+        'queryDeviceChartFieldsDatNew',
+        {
+          ...deviceParams(device),
+          precision,
+          sdate: toShineDateTime(from),
+          edate: toShineDateTime(to),
+          field: fieldIds.join(','),
+          source: 1,
+        },
+      );
+      return payload.date ?? [];
+    } catch (error: unknown) {
+      this.logger.warn(
+        `DatNew batch [${fieldIds.join(',')}] unavailable: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      if (fieldIds.length === 1) return [];
+
+      // Retry each field alone — multi-field DatNew often trips ERR_SYSTEM_EXCEPTION.
+      const rows: NonNullable<ShineChartFieldsDatPayload['date']> = [];
+      for (const fieldId of fieldIds) {
+        rows.push(
+          ...(await this.fetchDatNewBatch(device, [fieldId], from, to, precision)),
+        );
+      }
+      return rows;
+    }
   }
 }
 
@@ -389,4 +487,21 @@ function synthesizeConstantVoltageSeries(
     a.localeCompare(b),
   );
   return timestamps.map((t) => ({ t, v: voltage }));
+}
+
+/** Inclusive calendar days covered by a local `YYYY-MM-DD[ HH:mm:ss]` range. */
+export function enumerateCalendarDays(from: string, to: string): string[] {
+  const start = from.slice(0, 10);
+  const end = to.slice(0, 10);
+  const days: string[] = [];
+  const cursor = new Date(`${start}T00:00:00.000Z`);
+  const last = new Date(`${end}T00:00:00.000Z`);
+  if (!Number.isFinite(cursor.getTime()) || !Number.isFinite(last.getTime())) {
+    return start ? [start] : [];
+  }
+  while (cursor.getTime() <= last.getTime()) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
 }

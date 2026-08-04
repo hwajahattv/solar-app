@@ -36,6 +36,13 @@ export const CALCULATED_CHART_FIELDS: CalculatedChartFieldDef[] = [
   },
 ];
 
+/** Shine `querySPDeviceKeyParameterOneDay` parameter for a calculated field. */
+export function spParameterForCalculatedField(id: string): string | null {
+  if (id === 'calc_pv_generation_kwh') return 'PV_OUTPUT_POWER';
+  if (id === 'calc_load_consumption_kwh') return 'LOAD_ACTIVE_POWER';
+  return null;
+}
+
 export function isCalculatedChartField(id: string): boolean {
   return CALCULATED_CHART_FIELDS.some((field) => field.id === id);
 }
