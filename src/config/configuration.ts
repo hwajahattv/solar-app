@@ -30,12 +30,27 @@ const toInt = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+/**
+ * Normalize CORS origins from env.
+ * Vercel/dashboard values often include quotes or a trailing slash; browsers
+ * never send those, so an unnormalized allowlist silently rejects the SPA.
+ */
+export function parseCorsOrigins(raw: string | undefined): string[] {
+  const source = raw?.trim() ? raw : 'http://localhost:4200';
+  return source
+    .split(/[\n,]/)
+    .map((origin) =>
+      origin
+        .trim()
+        .replace(/^['"]+|['"]+$/g, '')
+        .replace(/\/+$/, ''),
+    )
+    .filter(Boolean);
+}
+
 export const configuration = (): AppConfiguration => ({
   port: toInt(process.env.PORT, 3000),
-  corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:4200')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
   timezone: process.env.APP_TIMEZONE ?? 'Asia/Karachi',
   shine: {
     upstreamUrl:

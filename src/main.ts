@@ -21,9 +21,31 @@ async function bootstrap(): Promise<void> {
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(compression());
 
+  const corsOrigins = config.getOrThrow<string[]>('corsOrigins');
+  const allowedOrigins = new Set(
+    corsOrigins.map((origin) => origin.trim().replace(/\/+$/, '').toLowerCase()),
+  );
+  logger.log(`CORS allowlist: ${corsOrigins.join(', ') || '(empty)'}`);
+
   app.enableCors({
-    origin: config.getOrThrow<string[]>('corsOrigins'),
+    origin: (origin, callback) => {
+      // Non-browser clients (curl, server-to-server) omit Origin.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = origin.trim().replace(/\/+$/, '').toLowerCase();
+      if (allowedOrigins.has('*') || allowedOrigins.has(normalized)) {
+        callback(null, origin);
+        return;
+      }
+      logger.warn(
+        `CORS rejected Origin=${origin}. Allowed=${corsOrigins.join(', ')}`,
+      );
+      callback(null, false);
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
     credentials: false,
   });
 
