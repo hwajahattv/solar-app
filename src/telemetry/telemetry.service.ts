@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { ChartsService } from '../charts/charts.service';
 import { todayInTimeZone } from '../common/utils/timezone';
 import { deviceParams, DeviceRefDto } from '../common/dto/device-ref.dto';
 import { ShineApiService } from '../shine/shine-api.service';
@@ -15,10 +16,12 @@ import { mapHistoryPage } from './mappers/history.mapper';
 
 @Injectable()
 export class TelemetryService {
+  private readonly logger = new Logger(TelemetryService.name);
   private readonly timeZone: string;
 
   constructor(
     private readonly shine: ShineApiService,
+    private readonly charts: ChartsService,
     config: ConfigService,
   ) {
     this.timeZone = config.getOrThrow<string>('timezone');
@@ -29,15 +32,22 @@ export class TelemetryService {
   }
 
   async energyFlow(device: DeviceRefDto): Promise<EnergyFlowDto> {
-    const payload = await this.shine.callOrThrow<ShineLastDataPayload>(
-      'querySPDeviceLastData',
-      {
+    const [payload, dailyEnergy] = await Promise.all([
+      this.shine.callOrThrow<ShineLastDataPayload>('querySPDeviceLastData', {
         ...deviceParams(device),
         i18n: this.shine.locale,
-      },
-    );
+      }),
+      this.charts.dailyEnergyTotals(device).catch((error: unknown) => {
+        this.logger.warn(
+          `Daily energy totals unavailable: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return null;
+      }),
+    ]);
 
-    return mapEnergyFlow(payload, this.timeZone);
+    return mapEnergyFlow(payload, this.timeZone, dailyEnergy);
   }
 
   async history(

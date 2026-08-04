@@ -3,7 +3,11 @@ import type {
   ShineLastDataPayload,
   ShineParameter,
 } from '../../shine/shine.types';
-import type { EnergyFlowDto, EnergySourceKind } from '../dto/energy-flow.dto';
+import type {
+  DailyEnergyDto,
+  EnergyFlowDto,
+  EnergySourceKind,
+} from '../dto/energy-flow.dto';
 
 /**
  * ShineMonitor parameter ids for an Axpert-style hybrid inverter. Keeping them in
@@ -62,6 +66,7 @@ export function flattenParameters(
 export function mapEnergyFlow(
   payload: ShineLastDataPayload,
   timeZone: string,
+  dailyEnergy?: Partial<DailyEnergyDto> | null,
 ): EnergyFlowDto {
   const parameters = flattenParameters(payload);
   const value = (id: string): number | null =>
@@ -148,6 +153,18 @@ export function mapEnergyFlow(
       current: round(loadCurrent, 2),
       outputVoltage: round(outputVoltage, 1),
       loadPercent: round(value(FLOW_PARAMETER_IDS.loadPercent), 0),
+    },
+    energy: {
+      generatedTodayKwh: round(dailyEnergy?.generatedTodayKwh ?? null, 3),
+      consumedTodayKwh: round(dailyEnergy?.consumedTodayKwh ?? null, 3),
+      batteryChargedTodayKwh: round(
+        dailyEnergy?.batteryChargedTodayKwh ?? null,
+        3,
+      ),
+      batteryDischargedTodayKwh: round(
+        dailyEnergy?.batteryDischargedTodayKwh ?? null,
+        3,
+      ),
     },
   };
 }

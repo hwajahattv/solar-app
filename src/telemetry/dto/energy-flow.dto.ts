@@ -83,6 +83,36 @@ export class LoadStateDto {
     number | null;
 }
 
+export class DailyEnergyDto {
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'PV generation today in kWh (integrated from PV power samples)',
+  })
+  generatedTodayKwh!: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Load consumption today in kWh (integrated from load power)',
+  })
+  consumedTodayKwh!: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Energy charged into the battery today in kWh',
+  })
+  batteryChargedTodayKwh!: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Energy supplied by the battery today in kWh',
+  })
+  batteryDischargedTodayKwh!: number | null;
+}
+
 export class EnergyFlowDto {
   @ApiPropertyOptional({
     type: String,
@@ -119,4 +149,10 @@ export class EnergyFlowDto {
   @ApiProperty({ type: SolarStateDto }) solar!: SolarStateDto;
   @ApiProperty({ type: BatteryStateDto }) battery!: BatteryStateDto;
   @ApiProperty({ type: LoadStateDto }) load!: LoadStateDto;
+
+  @ApiProperty({
+    type: DailyEnergyDto,
+    description: 'Daily energy totals derived from today’s chart power samples',
+  })
+  energy!: DailyEnergyDto;
 }

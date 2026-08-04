@@ -87,6 +87,48 @@ export interface ShineWarningRow {
   code?: string | number;
 }
 
+/** One catalog entry from `queryDeviceChartField`. */
+export interface ShineChartFieldRow {
+  /** Field id used in DatNew `field=` */
+  e0?: string;
+  /** Localized display title */
+  e1?: string;
+  /** Internal register meta */
+  e2?: string;
+  /** Unit string, e.g. kW / V / A / % */
+  e3?: string;
+}
+
+/** One sample inside DatNew `paramter[]` (upstream typo). */
+export interface ShineChartSample {
+  key?: string;
+  val?: string | number | null;
+}
+
+export interface ShineChartSeriesRow {
+  par?: string;
+  /** Upstream spelling — not `parameter`. */
+  paramter?: ShineChartSample[];
+}
+
+export interface ShineChartFieldsDatPayload {
+  date?: ShineChartSeriesRow[];
+}
+
+/** One sample from `querySPDeviceKeyParameterOneDay`. */
+export interface ShineKeyParameterSample {
+  val?: string | number | null;
+  ts?: string;
+}
+
+export interface ShineKeyParameterOneDayPayload {
+  detail?: ShineKeyParameterSample[];
+}
+
+export interface ShineKeyParametersPayload {
+  keys?: string[];
+}
+
 export type ShineParams = Record<
   string,
   string | number | boolean | undefined | null
