@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/v1/cron/daily-energy-snapshot",
+      "schedule": "50 18 * * *"
+    },
+    {
+      "path": "/api/v1/cron/daily-energy-snapshot",
+      "schedule": "58 18 * * *"
+    }
+  ]
+}

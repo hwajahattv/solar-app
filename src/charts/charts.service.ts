@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 
 import { todayInTimeZone } from '../common/utils/timezone';
 import { deviceParams, DeviceRefDto } from '../common/dto/device-ref.dto';
+import { DailyEnergyService } from '../daily-energy/daily-energy.service';
+import type { DailyEnergyTotals } from '../daily-energy/daily-energy.types';
 import { ShineApiService } from '../shine/shine-api.service';
 import type {
   ShineChartFieldRow,
@@ -40,18 +42,20 @@ const BATTERY_ENERGY_CHART_FIELDS = [
 
 const DAILY_ENERGY_CACHE_TTL_MS = 60_000;
 /** Fallback when voltage series is missing (typical 48V LiFePO4 pack). */
-const FALLBACK_BATTERY_VOLTAGE = 51.2;
+const FALLBACK_BATTERY_VOLTAGE = 25.6;
 /** Shine DatNew is unstable above ~2–3 fields; fetch in tiny batches. */
 const DATNEW_FIELD_BATCH_SIZE = 2;
 
 const MAX_FIELDS = 8;
 const MAX_RANGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-export interface DailyEnergyTotals {
-  generatedTodayKwh: number | null;
-  consumedTodayKwh: number | null;
-  batteryChargedTodayKwh: number | null;
-  batteryDischargedTodayKwh: number | null;
+export type { DailyEnergyTotals } from '../daily-energy/daily-energy.types';
+
+export interface DailyEnergyComputeOptions {
+  /** Calendar day YYYY-MM-DD; defaults to today in APP_TIMEZONE. */
+  day?: string;
+  /** Skip the in-memory cache (used by end-of-day cron snapshots). */
+  bypassCache?: boolean;
 }
 
 @Injectable()
@@ -65,6 +69,7 @@ export class ChartsService {
 
   constructor(
     private readonly shine: ShineApiService,
+    private readonly dailyEnergy: DailyEnergyService,
     config: ConfigService,
   ) {
     this.timeZone = config.getOrThrow<string>('timezone');
@@ -169,12 +174,17 @@ export class ChartsService {
   }
 
   /** Daily energy totals for the energy-flow dashboard (today in app timezone). */
-  async dailyEnergyTotals(device: DeviceRefDto): Promise<DailyEnergyTotals> {
-    const day = todayInTimeZone(this.timeZone);
+  async dailyEnergyTotals(
+    device: DeviceRefDto,
+    options?: DailyEnergyComputeOptions,
+  ): Promise<DailyEnergyTotals> {
+    const day = options?.day?.trim() || todayInTimeZone(this.timeZone);
     const cacheKey = `${device.pn}|${device.sn}|${device.devcode}|${device.devaddr}|${day}`;
-    const cached = this.dailyEnergyCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.value;
+    if (!options?.bypassCache) {
+      const cached = this.dailyEnergyCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return cached.value;
+      }
     }
 
     const from = `${day} 00:00:00`;
@@ -218,6 +228,8 @@ export class ChartsService {
       expiresAt: Date.now() + DAILY_ENERGY_CACHE_TTL_MS,
       value: totals,
     });
+
+    void this.dailyEnergy.save(device, day, totals);
 
     this.logger.debug(
       `Daily energy ${day}: gen=${totals.generatedTodayKwh} consumed=${totals.consumedTodayKwh} charged=${totals.batteryChargedTodayKwh} discharged=${totals.batteryDischargedTodayKwh}`,
