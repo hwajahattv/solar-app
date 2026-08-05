@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 
 import type { DailyEnergyTotals } from '../daily-energy/daily-energy.types';
+import { mergeMaxDailyEnergyTotals } from '../daily-energy/daily-energy.types';
 import { DeviceRefDto } from '../common/dto/device-ref.dto';
 import { PrismaService } from '../database/prisma.service';
 
@@ -20,11 +21,37 @@ export class DailyEnergyService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Upsert today's (or any day's) integrated totals for a device. */
+  /** Upsert daily totals, retaining the maximum value seen for each metric. */
   async save(device: DeviceRefDto, day: string, totals: DailyEnergyTotals): Promise<void> {
     if (!this.prisma.enabled) return;
 
     try {
+      const existing = await this.prisma.dailyEnergyRecord.findUnique({
+        where: {
+          pn_sn_devcode_devaddr_day: {
+            pn: device.pn,
+            sn: device.sn,
+            devcode: device.devcode,
+            devaddr: device.devaddr,
+            day,
+          },
+        },
+      });
+
+      const merged = mergeMaxDailyEnergyTotals(
+        existing
+          ? {
+              generatedTodayKwh: fromDecimal(existing.generatedTodayKwh),
+              consumedTodayKwh: fromDecimal(existing.consumedTodayKwh),
+              batteryChargedTodayKwh: fromDecimal(existing.batteryChargedTodayKwh),
+              batteryDischargedTodayKwh: fromDecimal(
+                existing.batteryDischargedTodayKwh,
+              ),
+            }
+          : null,
+        totals,
+      );
+
       await this.prisma.dailyEnergyRecord.upsert({
         where: {
           pn_sn_devcode_devaddr_day: {
@@ -41,16 +68,16 @@ export class DailyEnergyService {
           devcode: device.devcode,
           devaddr: device.devaddr,
           day,
-          generatedTodayKwh: toDecimal(totals.generatedTodayKwh),
-          consumedTodayKwh: toDecimal(totals.consumedTodayKwh),
-          batteryChargedTodayKwh: toDecimal(totals.batteryChargedTodayKwh),
-          batteryDischargedTodayKwh: toDecimal(totals.batteryDischargedTodayKwh),
+          generatedTodayKwh: toDecimal(merged.generatedTodayKwh),
+          consumedTodayKwh: toDecimal(merged.consumedTodayKwh),
+          batteryChargedTodayKwh: toDecimal(merged.batteryChargedTodayKwh),
+          batteryDischargedTodayKwh: toDecimal(merged.batteryDischargedTodayKwh),
         },
         update: {
-          generatedTodayKwh: toDecimal(totals.generatedTodayKwh),
-          consumedTodayKwh: toDecimal(totals.consumedTodayKwh),
-          batteryChargedTodayKwh: toDecimal(totals.batteryChargedTodayKwh),
-          batteryDischargedTodayKwh: toDecimal(totals.batteryDischargedTodayKwh),
+          generatedTodayKwh: toDecimal(merged.generatedTodayKwh),
+          consumedTodayKwh: toDecimal(merged.consumedTodayKwh),
+          batteryChargedTodayKwh: toDecimal(merged.batteryChargedTodayKwh),
+          batteryDischargedTodayKwh: toDecimal(merged.batteryDischargedTodayKwh),
         },
       });
     } catch (error: unknown) {

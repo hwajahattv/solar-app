@@ -23,6 +23,10 @@ export interface ControlsConfig {
   secret: string;
 }
 
+export interface CronConfig {
+  secret: string;
+}
+
 export interface AppConfiguration {
   port: number;
   corsOrigins: string[];
@@ -32,6 +36,7 @@ export interface AppConfiguration {
   shine: ShineConfig;
   camera: CameraConfig;
   controls: ControlsConfig;
+  cron: CronConfig;
 }
 
 export interface DatabaseConfig {
@@ -94,6 +99,9 @@ export const configuration = (): AppConfiguration => {
         controlsPassword,
         process.env.CONTROLS_SECRET ?? '',
       ),
+    },
+    cron: {
+      secret: process.env.CRON_SECRET?.trim() ?? '',
     },
   };
 };

@@ -51,6 +51,13 @@ const MAX_RANGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type { DailyEnergyTotals } from '../daily-energy/daily-energy.types';
 
+export interface DailyEnergyComputeOptions {
+  /** Calendar day YYYY-MM-DD; defaults to today in APP_TIMEZONE. */
+  day?: string;
+  /** Skip the in-memory cache (used by end-of-day cron snapshots). */
+  bypassCache?: boolean;
+}
+
 @Injectable()
 export class ChartsService {
   private readonly logger = new Logger(ChartsService.name);
@@ -167,12 +174,17 @@ export class ChartsService {
   }
 
   /** Daily energy totals for the energy-flow dashboard (today in app timezone). */
-  async dailyEnergyTotals(device: DeviceRefDto): Promise<DailyEnergyTotals> {
-    const day = todayInTimeZone(this.timeZone);
+  async dailyEnergyTotals(
+    device: DeviceRefDto,
+    options?: DailyEnergyComputeOptions,
+  ): Promise<DailyEnergyTotals> {
+    const day = options?.day?.trim() || todayInTimeZone(this.timeZone);
     const cacheKey = `${device.pn}|${device.sn}|${device.devcode}|${device.devaddr}|${day}`;
-    const cached = this.dailyEnergyCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.value;
+    if (!options?.bypassCache) {
+      const cached = this.dailyEnergyCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return cached.value;
+      }
     }
 
     const from = `${day} 00:00:00`;
