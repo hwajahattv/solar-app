@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// One row per device per calendar day (APP_TIMEZONE). Updated as live totals refresh.
+model DailyEnergyRecord {
+  id                        String   @id @default(cuid())
+  pn                        String
+  sn                        String
+  devcode                   String
+  devaddr                   String
+  /// Calendar day YYYY-MM-DD in the application timezone.
+  day                       String
+  generatedTodayKwh         Decimal? @db.Decimal(12, 3)
+  consumedTodayKwh          Decimal? @db.Decimal(12, 3)
+  batteryChargedTodayKwh    Decimal? @db.Decimal(12, 3)
+  batteryDischargedTodayKwh Decimal? @db.Decimal(12, 3)
+  computedAt                DateTime @updatedAt
+  createdAt                 DateTime @default(now())
+
+  @@unique([pn, sn, devcode, devaddr, day])
+  @@index([pn, sn, devcode, devaddr, day])
+}

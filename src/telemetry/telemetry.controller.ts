@@ -2,6 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { DeviceRefDto } from '../common/dto/device-ref.dto';
+import { DailyEnergyHistoryDto, DailyEnergyQueryDto } from './dto/daily-energy.dto';
 import { EnergyFlowDto } from './dto/energy-flow.dto';
 import { HistoryPageDto, HistoryQueryDto } from './dto/history.dto';
 import { TelemetryService } from './telemetry.service';
@@ -20,6 +21,17 @@ export class TelemetryController {
   @ApiOkResponse({ type: EnergyFlowDto })
   energyFlow(@Query() device: DeviceRefDto): Promise<EnergyFlowDto> {
     return this.telemetry.energyFlow(device);
+  }
+
+  @Get('daily-energy')
+  @ApiOperation({
+    summary: 'Stored daily energy totals',
+    description:
+      'Returns persisted kWh totals per calendar day. Rows are written whenever the dashboard refreshes live totals.',
+  })
+  @ApiOkResponse({ type: DailyEnergyHistoryDto })
+  dailyEnergy(@Query() query: DailyEnergyQueryDto): Promise<DailyEnergyHistoryDto> {
+    return this.telemetry.dailyEnergyHistory(query, query.from, query.to);
   }
 
   @Get('history')

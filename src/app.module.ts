@@ -8,6 +8,7 @@ import { ChartsModule } from './charts/charts.module';
 import { configuration } from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { ControlsModule } from './controls/controls.module';
+import { DatabaseModule } from './database/database.module';
 import { DevicesModule } from './devices/devices.module';
 import { DiagnosticsModule } from './diagnostics/diagnostics.module';
 import { HealthModule } from './health/health.module';
@@ -23,6 +24,7 @@ import { TelemetryModule } from './telemetry/telemetry.module';
       validate: validateEnv,
       envFilePath: ['.env.local', '.env'],
     }),
+    DatabaseModule,
     ShineModule,
     AuthModule,
     DevicesModule,

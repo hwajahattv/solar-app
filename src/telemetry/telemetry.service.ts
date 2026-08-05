@@ -4,11 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import { ChartsService } from '../charts/charts.service';
 import { todayInTimeZone } from '../common/utils/timezone';
 import { deviceParams, DeviceRefDto } from '../common/dto/device-ref.dto';
+import { DailyEnergyService } from '../daily-energy/daily-energy.service';
 import { ShineApiService } from '../shine/shine-api.service';
 import type {
   ShineHistoryPayload,
   ShineLastDataPayload,
 } from '../shine/shine.types';
+import { DailyEnergyHistoryDto } from './dto/daily-energy.dto';
 import { EnergyFlowDto } from './dto/energy-flow.dto';
 import { HistoryPageDto } from './dto/history.dto';
 import { mapEnergyFlow } from './mappers/energy-flow.mapper';
@@ -22,6 +24,7 @@ export class TelemetryService {
   constructor(
     private readonly shine: ShineApiService,
     private readonly charts: ChartsService,
+    private readonly dailyEnergy: DailyEnergyService,
     config: ConfigService,
   ) {
     this.timeZone = config.getOrThrow<string>('timezone');
@@ -48,6 +51,17 @@ export class TelemetryService {
     ]);
 
     return mapEnergyFlow(payload, this.timeZone, dailyEnergy);
+  }
+
+  async dailyEnergyHistory(
+    device: DeviceRefDto,
+    fromRaw?: string,
+    toRaw?: string,
+  ): Promise<DailyEnergyHistoryDto> {
+    const to = toRaw?.trim() || todayInTimeZone(this.timeZone);
+    const from = fromRaw?.trim() || to;
+    const records = await this.dailyEnergy.list(device, from, to);
+    return { from, to, records };
   }
 
   async history(

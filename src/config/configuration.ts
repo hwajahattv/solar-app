@@ -28,9 +28,14 @@ export interface AppConfiguration {
   corsOrigins: string[];
   /** IANA zone used to interpret upstream wall-clock timestamps and "today". */
   timezone: string;
+  database: DatabaseConfig;
   shine: ShineConfig;
   camera: CameraConfig;
   controls: ControlsConfig;
+}
+
+export interface DatabaseConfig {
+  url: string;
 }
 
 const toInt = (value: string | undefined, fallback: number): number => {
@@ -62,6 +67,9 @@ export const configuration = (): AppConfiguration => {
     port: toInt(process.env.PORT, 3000),
     corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
     timezone: process.env.APP_TIMEZONE ?? 'Asia/Karachi',
+    database: {
+      url: process.env.DATABASE_URL?.trim() ?? '',
+    },
     shine: {
       upstreamUrl:
         process.env.SHINE_UPSTREAM_URL ??
