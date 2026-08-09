@@ -10,7 +10,7 @@ CREATE TABLE "DailyEnergyRecord" (
     "consumedTodayKwh" DECIMAL(12,3),
     "batteryChargedTodayKwh" DECIMAL(12,3),
     "batteryDischargedTodayKwh" DECIMAL(12,3),
-    "computedAt" TIMESTAMP(3) NOT NULL,
+    "computedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DailyEnergyRecord_pkey" PRIMARY KEY ("id")
