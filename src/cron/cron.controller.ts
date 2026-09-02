@@ -1,12 +1,14 @@
 import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { Public } from '../auth/public.decorator';
 import { CronAuthGuard } from './cron-auth.guard';
 import { DailyEnergySnapshotService } from './daily-energy-snapshot.service';
 import { DailyEnergySnapshotResultDto } from './dto/daily-energy-snapshot.dto';
 
 @ApiTags('cron')
 @Controller('cron')
+@Public()
 @UseGuards(CronAuthGuard)
 export class CronController {
   constructor(private readonly snapshots: DailyEnergySnapshotService) {}

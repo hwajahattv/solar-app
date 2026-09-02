@@ -3,10 +3,13 @@ import { resolveControlsSecret } from '../controls/controls-auth.util';
 export interface ShineConfig {
   upstreamUrl: string;
   companyKey: string;
-  username: string;
-  password: string;
   requestTimeoutMs: number;
   locale: string;
+}
+
+export interface AuthConfig {
+  secret: string;
+  sessionTtlMs: number;
 }
 
 export interface CameraConfig {
@@ -34,6 +37,7 @@ export interface AppConfiguration {
   timezone: string;
   database: DatabaseConfig;
   shine: ShineConfig;
+  auth: AuthConfig;
   camera: CameraConfig;
   controls: ControlsConfig;
   cron: CronConfig;
@@ -80,10 +84,15 @@ export const configuration = (): AppConfiguration => {
         process.env.SHINE_UPSTREAM_URL ??
         'http://android.shinemonitor.com/public/',
       companyKey: process.env.SHINE_COMPANY_KEY ?? 'bnrl_frRFjEz8Mkn',
-      username: process.env.SHINE_USR ?? '',
-      password: process.env.SHINE_PWD ?? '',
       requestTimeoutMs: toInt(process.env.SHINE_TIMEOUT_MS, 30000),
       locale: process.env.SHINE_LOCALE ?? 'en_US',
+    },
+    auth: {
+      secret: process.env.AUTH_SECRET?.trim() ?? '',
+      sessionTtlMs: toInt(
+        process.env.AUTH_SESSION_TTL_MS,
+        7 * 24 * 60 * 60 * 1000,
+      ),
     },
     camera: {
       rtspUrl: process.env.CAMERA_RTSP ?? '',

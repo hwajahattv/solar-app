@@ -23,7 +23,9 @@ async function bootstrap(): Promise<void> {
 
   const corsOrigins = config.getOrThrow<string[]>('corsOrigins');
   const allowedOrigins = new Set(
-    corsOrigins.map((origin) => origin.trim().replace(/\/+$/, '').toLowerCase()),
+    corsOrigins.map((origin) =>
+      origin.trim().replace(/\/+$/, '').toLowerCase(),
+    ),
   );
   logger.log(`CORS allowlist: ${corsOrigins.join(', ') || '(empty)'}`);
 
@@ -69,9 +71,10 @@ async function bootstrap(): Promise<void> {
   const openApi = new DocumentBuilder()
     .setTitle('Knox Solar Gateway API')
     .setDescription(
-      'Device-agnostic API for the Knox solar inverter dashboard. All ShineMonitor credentials, signing and response normalisation happen here so web, mobile and TV clients stay thin.',
+      'Device-agnostic API for the Knox solar inverter dashboard. Clients sign in with ShineMonitor credentials; this gateway stores the user, holds the upstream session, and normalises inverter data so web, mobile and TV clients stay thin.',
     )
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
 
   SwaggerModule.setup(

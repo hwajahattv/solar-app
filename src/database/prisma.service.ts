@@ -18,9 +18,7 @@ export class PrismaService
   constructor(config: ConfigService) {
     const databaseUrl = config.get<string>('database.url')?.trim() ?? '';
     super(
-      databaseUrl
-        ? { datasources: { db: { url: databaseUrl } } }
-        : undefined,
+      databaseUrl ? { datasources: { db: { url: databaseUrl } } } : undefined,
     );
     this.enabled = databaseUrl.length > 0;
   }
@@ -28,7 +26,7 @@ export class PrismaService
   async onModuleInit(): Promise<void> {
     if (!this.enabled) {
       this.logger.warn(
-        'DATABASE_URL is not set — daily energy will not be persisted',
+        'DATABASE_URL is not set — user login and daily energy will not be persisted',
       );
       return;
     }

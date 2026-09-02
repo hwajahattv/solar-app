@@ -5,8 +5,8 @@ import { ShineHttpService } from './shine-http.service';
 import { ShineSessionService } from './shine-session.service';
 
 /**
- * Global because every feature module talks to ShineMonitor through the same
- * authenticated session — there is exactly one upstream account per deployment.
+ * Global because every feature module talks to ShineMonitor through
+ * ShineApiService. The upstream session is now per authenticated user.
  */
 @Global()
 @Module({
