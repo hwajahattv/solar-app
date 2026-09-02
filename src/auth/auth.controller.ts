@@ -1,65 +1,72 @@
-import { Controller, Get, Post } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 
-import { ShineSessionService } from '../shine/shine-session.service';
-import { SessionStatusDto } from './dto/session-status.dto';
+import { AuthService } from './auth.service';
+import { CurrentUser } from './current-user.decorator';
+import type { AuthPrincipal } from './auth.types';
+import { LoginDto } from './dto/login.dto';
+import { LoginResponseDto } from './dto/login-response.dto';
+import { UserSummaryDto } from './dto/user-summary.dto';
+import { Public } from './public.decorator';
 
-@ApiTags('session')
-@Controller('session')
+@ApiTags('auth')
+@Controller('auth')
 export class AuthController {
-  constructor(private readonly session: ShineSessionService) {}
+  constructor(private readonly auth: AuthService) {}
 
-  @Get()
+  @Public()
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Report upstream session state',
+    summary: 'Sign in with ShineMonitor credentials',
     description:
-      'Clients poll this on start-up to decide whether the dashboard can be shown. No secrets are returned.',
+      'Validates the username and password against ShineMonitor, records the user, and returns a gateway Bearer token. Subsequent device and telemetry calls use this account.',
   })
-  @ApiOkResponse({ type: SessionStatusDto })
-  async status(): Promise<SessionStatusDto> {
-    return this.describeSession();
+  @ApiOkResponse({ type: LoginResponseDto })
+  login(@Body() body: LoginDto): Promise<LoginResponseDto> {
+    return this.auth.login(body.username.trim(), body.password);
   }
 
-  @Post('refresh')
-  @ApiOperation({ summary: 'Force a new ShineMonitor login' })
-  @ApiOkResponse({ type: SessionStatusDto })
-  async refresh(): Promise<SessionStatusDto> {
-    if (this.session.isConfigured) {
-      try {
-        await this.session.ensure(true);
-      } catch {
-        // Fall through — describeSession reports the failure to the caller.
-      }
-    }
-    return this.describeSession();
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke the current gateway session' })
+  async logout(
+    @CurrentUser() user: AuthPrincipal | undefined,
+  ): Promise<{ ok: true }> {
+    await this.auth.logout(user);
+    return { ok: true };
   }
 
-  private async describeSession(): Promise<SessionStatusDto> {
-    if (!this.session.isConfigured) {
-      return {
-        configured: false,
-        authenticated: false,
-        error: 'SHINE_USR / SHINE_PWD are not set on the server',
-      };
-    }
+  @Get('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'The ShineMonitor account bound to this session' })
+  @ApiOkResponse({ type: UserSummaryDto })
+  me(@CurrentUser() user: AuthPrincipal): Promise<UserSummaryDto> {
+    return this.auth.currentUser(user);
+  }
 
-    try {
-      const session = await this.session.ensure();
-      return {
-        configured: true,
-        authenticated: true,
-        username: session.usr,
-        uid: session.uid,
-        expiresAt: new Date(
-          session.issuedAt + session.expire * 1000,
-        ).toISOString(),
-      };
-    } catch (error) {
-      return {
-        configured: true,
-        authenticated: false,
-        error: error instanceof Error ? error.message : 'Login failed',
-      };
-    }
+  @Get('users')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Accounts that have signed in through this gateway',
+    description:
+      'Does not include passwords, tokens or ShineMonitor secrets. Useful for an admin table of who has used the dashboard.',
+  })
+  @ApiOkResponse({ type: [UserSummaryDto] })
+  users(): Promise<UserSummaryDto[]> {
+    return this.auth.listUsers();
   }
 }

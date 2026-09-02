@@ -10,16 +10,16 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty({
     message:
-      'SHINE_USR is required — the server signs in to ShineMonitor on behalf of every client.',
+      'AUTH_SECRET is required — used to encrypt stored ShineMonitor passwords and bind gateway sessions.',
   })
-  SHINE_USR!: string;
+  AUTH_SECRET!: string;
 
   @IsString()
   @IsNotEmpty({
     message:
-      'SHINE_PWD is required — the server signs in to ShineMonitor on behalf of every client.',
+      'DATABASE_URL is required — logged-in users and gateway sessions are stored in Postgres.',
   })
-  SHINE_PWD!: string;
+  DATABASE_URL!: string;
 
   @IsOptional()
   @IsString()

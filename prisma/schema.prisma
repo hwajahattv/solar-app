@@ -7,6 +7,42 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// ShineMonitor account that has signed in through this gateway.
+/// Credentials are stored encrypted so the server can refresh upstream tokens
+/// without asking the user again (needed on Vercel, where memory is ephemeral).
+model User {
+  id                 String        @id @default(cuid())
+  /// ShineMonitor login name.
+  username           String        @unique
+  shineUid           String
+  /// AES-256-GCM ciphertext of the ShineMonitor password.
+  passwordCipher     String
+  shineTokenCipher   String?
+  shineSecretCipher  String?
+  shineExpireSeconds Int?
+  shineIssuedAt      DateTime?
+  lastLoginAt        DateTime
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  sessions           UserSession[]
+
+  @@index([shineUid])
+}
+
+/// Opaque gateway session (Bearer token). Revoking a row logs that client out.
+model UserSession {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 /// One row per device per calendar day (APP_TIMEZONE). Updated as live totals refresh.
 model DailyEnergyRecord {
   id                        String   @id @default(cuid())

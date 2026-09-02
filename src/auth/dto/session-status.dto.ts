@@ -2,12 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SessionStatusDto {
   @ApiProperty({
-    description: 'Whether ShineMonitor credentials are present on the server',
+    description:
+      'Whether the gateway is configured to accept logins (AUTH_SECRET and DATABASE_URL)',
   })
   configured!: boolean;
 
   @ApiProperty({
-    description: 'Whether the server currently holds a valid upstream session',
+    description:
+      'Whether this request is authenticated with a valid Bearer token',
   })
   authenticated!: boolean;
 
@@ -18,9 +20,15 @@ export class SessionStatusDto {
   uid?: string;
 
   @ApiPropertyOptional({
-    description: 'ISO timestamp at which the upstream token expires',
+    description:
+      'ISO timestamp at which the upstream ShineMonitor token expires',
   })
   expiresAt?: string;
+
+  @ApiPropertyOptional({
+    description: 'ISO timestamp at which this gateway Bearer session expires',
+  })
+  gatewayExpiresAt?: string;
 
   @ApiPropertyOptional({ description: 'Reason authentication is unavailable' })
   error?: string;
