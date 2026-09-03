@@ -62,3 +62,22 @@ model DailyEnergyRecord {
   @@unique([pn, sn, devcode, devaddr, day])
   @@index([pn, sn, devcode, devaddr, day])
 }
+
+/// One row per scheduled or manual daily-energy snapshot invocation.
+model CronRun {
+  id        String   @id @default(cuid())
+  day       String
+  trigger   String
+  schedule  String?
+  userAgent String?
+  startedAt DateTime
+  finishedAt DateTime
+  accounts  Int
+  devices   Int
+  saved     Int
+  failed    Int
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

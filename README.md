@@ -75,30 +75,67 @@ ShineMonitor's. Supporting a different inverter family is a data change.
 
 ## Endpoints
 
-| Method   | Path                                  | Purpose                              |
-| -------- | ------------------------------------- | ------------------------------------ |
-| GET      | `/api/v1/health`                      | Liveness                             |
-| POST     | `/api/v1/auth/login`                  | ShineMonitor login → gateway token   |
-| POST     | `/api/v1/auth/logout`                 | Revoke gateway token                 |
-| GET      | `/api/v1/auth/me`                     | Current user                         |
-| GET      | `/api/v1/auth/users`                  | Users who have logged in             |
-| GET      | `/api/v1/session`                     | Auth state                           |
-| POST     | `/api/v1/session/refresh`             | Force ShineMonitor re-login          |
-| GET      | `/api/v1/devices`                     | Inverter list for the signed-in user |
-| GET      | `/api/v1/telemetry/energy-flow`       | Live snapshot                        |
-| GET      | `/api/v1/telemetry/history`           | Data logger page                     |
-| GET      | `/api/v1/controls/fields`             | Writable settings                    |
-| GET      | `/api/v1/controls/fields/:id/value`   | Current value                        |
-| PUT      | `/api/v1/controls/fields/:id/value`   | Write one setting                    |
-| GET/POST | `/api/v1/controls/profiles/preferred` | Describe / apply the profile         |
-| GET      | `/api/v1/alarms`                      | Alarm list                           |
-| GET      | `/api/v1/camera/status`               | Camera availability                  |
-| GET      | `/api/v1/camera/stream`               | MJPEG stream                         |
-| GET      | `/api/v1/camera/snapshot`             | Single JPEG                          |
-| POST     | `/api/v1/diagnostics/shine-call`      | Raw signed passthrough               |
+| Method   | Path                                  | Purpose                                  |
+| -------- | ------------------------------------- | ---------------------------------------- |
+| GET      | `/api/v1/health`                      | Liveness                                 |
+| POST     | `/api/v1/auth/login`                  | ShineMonitor login → gateway token       |
+| POST     | `/api/v1/auth/logout`                 | Revoke gateway token                     |
+| GET      | `/api/v1/auth/me`                     | Current user                             |
+| GET      | `/api/v1/auth/users`                  | Users who have logged in                 |
+| GET      | `/api/v1/session`                     | Auth state                               |
+| POST     | `/api/v1/session/refresh`             | Force ShineMonitor re-login              |
+| GET      | `/api/v1/devices`                     | Inverter list for the signed-in user     |
+| GET      | `/api/v1/telemetry/energy-flow`       | Live snapshot                            |
+| GET      | `/api/v1/telemetry/history`           | Data logger page                         |
+| GET      | `/api/v1/controls/fields`             | Writable settings                        |
+| GET      | `/api/v1/controls/fields/:id/value`   | Current value                            |
+| PUT      | `/api/v1/controls/fields/:id/value`   | Write one setting                        |
+| GET/POST | `/api/v1/controls/profiles/preferred` | Describe / apply the profile             |
+| GET      | `/api/v1/alarms`                      | Alarm list                               |
+| GET      | `/api/v1/camera/status`               | Camera availability                      |
+| GET      | `/api/v1/camera/stream`               | MJPEG stream                             |
+| GET      | `/api/v1/camera/snapshot`             | Single JPEG                              |
+| POST     | `/api/v1/diagnostics/shine-call`      | Raw signed passthrough                   |
+| GET/POST | `/api/v1/cron/daily-energy-snapshot`  | End-of-day energy snapshot (CRON_SECRET) |
+| GET      | `/api/v1/cron/runs`                   | Recent snapshot invocations              |
 
 Device-scoped endpoints take `pn`, `sn`, `devcode` and `devaddr`, which come from
 `GET /devices`.
+
+## Vercel Cron troubleshooting
+
+Vercel Cron is an HTTP **GET** to `/api/v1/cron/daily-energy-snapshot` on the
+**production** deployment only. It does not run on Preview.
+
+**Schedule is always UTC**, not `APP_TIMEZONE`. This project uses Asia/Karachi
+(UTC+5, no DST). The jobs in `vercel.json` are `50 18 * * *` and `58 18 * * *`,
+which is 23:50 / 23:58 in Karachi. The previous `23:50` expression was 04:50 AM
+Pakistan time — easy to miss if you were watching local midnight.
+
+On the **Hobby** plan, Vercel may fire a daily job **any time during that hour**,
+not at minute 50.
+
+### Checklist
+
+1. Vercel → Project → **Settings → Cron Jobs**. The two paths must be listed with
+   a next run. If the list is empty, `vercel.json` never reached a production
+   deploy — ship to production again.
+2. Set `CRON_SECRET` under **Settings → Environment Variables** for
+   **Production**, then **redeploy**. Vercel sends
+   `Authorization: Bearer <CRON_SECRET>`. If the variable is missing, every cron
+   call returns 401 and looks like “it never ran”.
+3. Disable **Deployment Protection** for production, or the GET never reaches
+   Nest (cron does not follow redirects / login walls).
+4. At least one user must have used `POST /auth/login`. With no `User` rows the
+   job runs and saves **0 devices**.
+5. Trigger it yourself:
+   - Dashboard: Cron Jobs → **Run**
+   - Postman: `GET https://<prod>/api/v1/cron/daily-energy-snapshot` with
+     `Authorization: Bearer <CRON_SECRET>`
+6. Confirm it executed:
+   - Project → **Logs**, filter path `/api/v1/cron/daily-energy-snapshot`
+     (user-agent `vercel-cron/1.0`)
+   - `GET /api/v1/cron/runs` with the same Bearer secret
 
 ## Testing
 
