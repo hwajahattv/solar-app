@@ -7,8 +7,16 @@ import { ChartsService } from '../charts/charts.service';
 import { todayInTimeZone } from '../common/utils/timezone';
 import { DeviceRefDto } from '../common/dto/device-ref.dto';
 import { DailyEnergyService } from '../daily-energy/daily-energy.service';
+import { PrismaService } from '../database/prisma.service';
 import { DevicesService } from '../devices/devices.service';
+import type { CronRunDto } from './dto/daily-energy-snapshot.dto';
 import type { DailyEnergySnapshotResultDto } from './dto/daily-energy-snapshot.dto';
+
+export interface SnapshotInvocationMeta {
+  trigger: 'vercel-cron' | 'manual';
+  schedule?: string;
+  userAgent?: string;
+}
 
 @Injectable()
 export class DailyEnergySnapshotService {
@@ -20,6 +28,7 @@ export class DailyEnergySnapshotService {
     private readonly devices: DevicesService,
     private readonly dailyEnergy: DailyEnergyService,
     private readonly auth: AuthService,
+    private readonly prisma: PrismaService,
     config: ConfigService,
   ) {
     this.timeZone = config.getOrThrow<string>('timezone');
@@ -32,9 +41,31 @@ export class DailyEnergySnapshotService {
    */
   async snapshotAll(
     dayOverride?: string,
+    meta: SnapshotInvocationMeta = { trigger: 'manual' },
   ): Promise<DailyEnergySnapshotResultDto> {
+    const startedAt = new Date();
     const day = dayOverride?.trim() || todayInTimeZone(this.timeZone);
-    const users = await this.auth.listActiveUsers();
+
+    this.logger.log(
+      `Daily energy snapshot starting day=${day} tz=${this.timeZone} trigger=${meta.trigger} schedule=${meta.schedule ?? '-'} ua=${meta.userAgent ?? '-'}`,
+    );
+
+    let users: Awaited<ReturnType<AuthService['listActiveUsers']>> = [];
+    let note: string | undefined;
+    let error: string | undefined;
+
+    try {
+      users = await this.auth.listActiveUsers();
+    } catch (err: unknown) {
+      error = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Cannot list users for snapshot: ${error}`);
+    }
+
+    if (!error && users.length === 0) {
+      note =
+        'No users have logged in yet, so there are no ShineMonitor accounts to snapshot.';
+      this.logger.warn(note);
+    }
 
     const results: DailyEnergySnapshotResultDto['results'] = [];
     let saved = 0;
@@ -51,17 +82,102 @@ export class DailyEnergySnapshotService {
       results.push(...outcome.results);
     }
 
+    const finishedAt = new Date();
     this.logger.log(
-      `Daily energy snapshot ${day}: ${saved}/${devices} saved, ${failed} failed (${users.length} accounts)`,
+      `Daily energy snapshot ${day}: ${saved}/${devices} saved, ${failed} failed (${users.length} accounts) in ${finishedAt.getTime() - startedAt.getTime()}ms`,
     );
+
+    const runId = await this.persistRun({
+      day,
+      trigger: meta.trigger,
+      schedule: meta.schedule,
+      userAgent: meta.userAgent,
+      startedAt,
+      finishedAt,
+      accounts: users.length,
+      devices,
+      saved,
+      failed,
+      error,
+    });
 
     return {
       day,
+      accounts: users.length,
       devices,
       saved,
       failed,
       results,
+      runId,
+      invokedAt: startedAt.toISOString(),
+      trigger: meta.trigger,
+      schedule: meta.schedule,
+      note: note ?? error,
     };
+  }
+
+  async listRuns(limit = 20): Promise<CronRunDto[]> {
+    if (!this.prisma.enabled) return [];
+
+    const rows = await this.prisma.cronRun.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      day: row.day,
+      trigger: row.trigger,
+      schedule: row.schedule,
+      userAgent: row.userAgent,
+      startedAt: row.startedAt.toISOString(),
+      finishedAt: row.finishedAt.toISOString(),
+      accounts: row.accounts,
+      devices: row.devices,
+      saved: row.saved,
+      failed: row.failed,
+      error: row.error,
+    }));
+  }
+
+  private async persistRun(input: {
+    day: string;
+    trigger: string;
+    schedule?: string;
+    userAgent?: string;
+    startedAt: Date;
+    finishedAt: Date;
+    accounts: number;
+    devices: number;
+    saved: number;
+    failed: number;
+    error?: string;
+  }): Promise<string | undefined> {
+    if (!this.prisma.enabled) return undefined;
+
+    try {
+      const row = await this.prisma.cronRun.create({
+        data: {
+          day: input.day,
+          trigger: input.trigger,
+          schedule: input.schedule,
+          userAgent: input.userAgent,
+          startedAt: input.startedAt,
+          finishedAt: input.finishedAt,
+          accounts: input.accounts,
+          devices: input.devices,
+          saved: input.saved,
+          failed: input.failed,
+          error: input.error,
+        },
+      });
+      return row.id;
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Failed to persist cron run: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return undefined;
+    }
   }
 
   private async snapshotUser(
@@ -78,6 +194,7 @@ export class DailyEnergySnapshotService {
       );
       return {
         day,
+        accounts: 1,
         devices: 0,
         saved: 0,
         failed: 1,
@@ -136,6 +253,7 @@ export class DailyEnergySnapshotService {
 
     return {
       day,
+      accounts: 1,
       devices: deviceList.length,
       saved,
       failed,
