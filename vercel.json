@@ -5,11 +5,7 @@
   "crons": [
     {
       "path": "/api/v1/cron/daily-energy-snapshot",
-      "schedule": "50 23 * * *"
-    },
-    {
-      "path": "/api/v1/cron/daily-energy-snapshot",
-      "schedule": "58 23 * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }
